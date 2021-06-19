@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"log"
 	"time"
 	"zgo.at/zcache"
 )
@@ -24,7 +25,7 @@ func main() {
 	// Use GoFiber to host REST API traffic
 	app := fiber.New()
 
-	// Application index routes
+	// Activity metric routes
 	routes := app.Group("/metric/:key")
 	{
 		routes.Post("", captureActivity)
@@ -32,7 +33,11 @@ func main() {
 	}
 
 	// Start listening for traffic
-	app.Listen(":3000")
+	err := app.Listen(":3000")
+
+	if err != nil {
+		log.Panicln("Unable to start activity-tracker application on port 3000", err)
+	}
 }
 
 // captureActivity records provided service traffic metrics.
