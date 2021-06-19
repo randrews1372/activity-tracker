@@ -5,7 +5,6 @@ import (
 	"github.com/google/uuid"
 	"log"
 	"sync"
-	"time"
 	"zgo.at/zcache"
 )
 
@@ -33,7 +32,7 @@ func captureActivity(c *fiber.Ctx) error {
 	if !found {
 
 		// Since activity has not been previously used, create new cache instance
-		activityCache = zcache.New(time.Hour*1, time.Minute*1)
+		activityCache = zcache.New(activityTTLDuration, activityTTLCheckInterval)
 		activityMap[activityKey] = activityCache
 	}
 
