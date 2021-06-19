@@ -2,100 +2,83 @@ package main
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/google/uuid"
 	"log"
 	"time"
 	"zgo.at/zcache"
 )
 
-// activityMetric is used to parse incoming traffic metrics info during activity capture.
-type activityMetric struct {
-	Value int `json:"value"`
-}
-
-// Use in-memory cache since it automatically provides TTL eviction and quick in-memory access.
+// activityMap uses an in-memory cache since it automatically provides TTL eviction and quick in-memory access
 var activityMap map[string]*zcache.Cache
+
+// appServer holds a reference to the application server so it can be shutdown if needed
+var appServer *fiber.App
+
+// appServerInitWaitDuration is the time increment used while waiting for the app server to complete startup
+const appServerInitWaitDuration = time.Millisecond * 250
+
+// appServerListenAddress is the host and port for the application server to use for binding
+const appServerListenAddress = "localhost:3000"
+
+// isInitializationComplete will set to true after API routing initialization is finished
+var isInitializationComplete bool
 
 // main serves as the application entry point.
 func main() {
+
+	// Reset init flag to false to be safe
+	isInitializationComplete = false
 
 	// Setup activity map to store captured values
 	activityMap = make(map[string]*zcache.Cache)
 
 	// Use GoFiber to host REST API traffic
-	app := fiber.New()
+	appServer = fiber.New()
 
 	// Activity metric routes
-	routes := app.Group("/metric/:key")
+	routes := appServer.Group("/metric/:key")
 	{
 		routes.Post("", captureActivity)
 		routes.Get("/sum", reportActivity)
 	}
 
 	// Start listening for traffic
-	err := app.Listen(":3000")
+	isInitializationComplete = true
+	log.Println("Starting application server at:", appServerListenAddress)
+	err := appServer.Listen(appServerListenAddress)
 
 	if err != nil {
-		log.Panicln("Unable to start activity-tracker application on port 3000", err)
+		log.Panicln("Unable to start activity-tracker application at: "+appServerListenAddress, err)
 	}
 }
 
-// captureActivity records provided service traffic metrics.
-func captureActivity(c *fiber.Ctx) error {
+// shutdown stops the application server if it is running.
+func shutdown() {
 
-	// Use struct to hold parse JSON activity value
-	activity := activityMetric{}
+	log.Println("Entering shutdown")
 
-	// Parse JSON body into activity metric
-	if err := c.BodyParser(&activity); err != nil {
-		return err
-	}
+	if appServer != nil {
 
-	// Obtain activity key from path parameter
-	activityKey := c.Params("key")
+		log.Println("Shutting down application server")
+		err := appServer.Shutdown()
 
-	if len(activityKey) == 0 {
-		return fiber.NewError(fiber.StatusPreconditionFailed, "Invalid activity used as path parameter")
-	}
-
-	activityCache, found := activityMap[activityKey]
-
-	if !found {
-		activityCache = zcache.New(time.Hour*1, time.Minute*1)
-		activityMap[activityKey] = activityCache
-	}
-
-	activityCache.Set(uuid.NewString(), activity.Value, zcache.DefaultExpiration)
-
-	c.Set("Content-Type", "application/json")
-	return c.SendString("{}")
-}
-
-// reportActivity returns service traffic metrics for the last hour.
-func reportActivity(c *fiber.Ctx) error {
-
-	// Obtain activity key from path parameter
-	activityKey := c.Params("key")
-
-	if len(activityKey) == 0 {
-		return fiber.NewError(fiber.StatusPreconditionFailed, "Invalid activity used as path parameter")
-	}
-
-	activity := activityMetric{}
-
-	activityCache, found := activityMap[activityKey]
-
-	if found {
-
-		for _, cacheKey := range activityCache.Keys() {
-
-			cacheEntry, isPresent := activityCache.Get(cacheKey)
-
-			if isPresent {
-				activity.Value += cacheEntry.(int)
-			}
+		if err != nil {
+			log.Println("Error received when shutting down application server: " + err.Error())
 		}
 	}
 
-	return c.JSON(activity)
+	log.Println("Exiting shutdown")
+}
+
+// waitForInitialization ensures app server is fully started before returning.
+func waitForInitialization() {
+
+	log.Println("Entering waitForInitialization")
+
+	for !isInitializationComplete {
+		time.Sleep(appServerInitWaitDuration)
+	}
+
+	// Wait an additional period to be certain app server has started listening
+	time.Sleep(appServerInitWaitDuration)
+	log.Println("Exiting waitForInitialization")
 }
