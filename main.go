@@ -32,7 +32,10 @@ func main() {
 	activityMap = make(map[string]*zcache.Cache)
 
 	// Use GoFiber to host REST API traffic
-	appServer = fiber.New()
+	appServer = fiber.New(fiber.Config{
+		// Make sure open client connections do not hinder app server from shutting down gracefully
+		ReadTimeout: time.Second * 1,
+	})
 
 	// Activity metric routes
 	routes := appServer.Group("/metric/:key")

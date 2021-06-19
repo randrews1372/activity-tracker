@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"log"
 	"time"
 	"zgo.at/zcache"
 )
@@ -18,12 +19,8 @@ func captureActivity(c *fiber.Ctx) error {
 		return err
 	}
 
-	// Obtain activity key from path parameter
+	// Obtain activity key from path parameter. Due to routing matching, it is impossible for the activityKey to be empty
 	activityKey := c.Params("key")
-
-	if len(activityKey) == 0 {
-		return fiber.NewError(fiber.StatusPreconditionFailed, "Invalid activity used as path parameter")
-	}
 
 	activityCache, found := activityMap[activityKey]
 
@@ -41,12 +38,8 @@ func captureActivity(c *fiber.Ctx) error {
 // reportActivity returns service traffic metrics for the last hour.
 func reportActivity(c *fiber.Ctx) error {
 
-	// Obtain activity key from path parameter
+	// Obtain activity key from path parameter. Due to routing matching, it is impossible for the activityKey to be empty
 	activityKey := c.Params("key")
-
-	if len(activityKey) == 0 {
-		return fiber.NewError(fiber.StatusPreconditionFailed, "Invalid activity used as path parameter")
-	}
 
 	activity := activityMetric{}
 
@@ -62,6 +55,8 @@ func reportActivity(c *fiber.Ctx) error {
 				activity.Value += cacheEntry.(int)
 			}
 		}
+	} else {
+		log.Println("Unable to find matching key entry for activityKey:", activityKey)
 	}
 
 	return c.JSON(activity)
